@@ -2,6 +2,7 @@ import express from 'express';
 import { prisma } from '../lib/prisma';
 import { RateLimitStrategy } from '@prisma/client';
 import { authenticateApiKey } from '../middleware/auth';
+import { ProxyService } from '../services/ProxyService';
 
 const router = express.Router();
 
@@ -128,6 +129,28 @@ router.delete('/:id', authenticateApiKey, async (req, res) => {
     });
   } catch (error) {
     console.error('Error deleting API:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Proxy route
+router.all('/:appId/*', authenticateApiKey, async (req, res) => {
+  try {
+    const { appId } = req.params;
+    const path = req.params[0];
+    const proxyService = ProxyService.getInstance();
+    
+    const result = await proxyService.forwardRequest(
+      appId,
+      path,
+      req.method,
+      req.headers,
+      req.body
+    );
+
+    res.status(result.status).json(result.data);
+  } catch (error) {
+    console.error('Proxy error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

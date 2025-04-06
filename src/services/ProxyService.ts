@@ -17,19 +17,27 @@ export class ProxyService {
     return ProxyService.instance;
   }
 
-  public async forwardRequest(appId: string, path: string, method: string, headers: any, body?: any): Promise<Response> {
+  public async forwardRequest(appId: string, path: string, method: string, headers: any, body?: any): Promise<{ status: number; data: any; headers: any }> {
     const app = await prisma.app.findUnique({
       where: { id: appId }
     });
 
     if (!app) {
-      throw new Error('App not found');
+      return {
+        status: 404,
+        data: { error: 'App not found' },
+        headers: {}
+      };
     }
 
     // Check rate limit before forwarding
     const isAllowed = await this.rateLimitService.checkRateLimit(appId);
     if (!isAllowed) {
-      throw new Error('Rate limit exceeded');
+      return {
+        status: 429,
+        data: { error: 'API rate limit exceeded' },
+        headers: {}
+      };
     }
 
     // Construct target URL
@@ -39,10 +47,15 @@ export class ProxyService {
     const response = await fetch(targetUrl, {
       method,
       headers: this.filterHeaders(headers),
-      body: body ? JSON.stringify(body) : undefined
+      body: method === 'GET' ? undefined : body ? JSON.stringify(body) : undefined
     });
 
-    return response;
+    const responseData = await response.json();
+    return {
+      status: response.status,
+      data: responseData,
+      headers: response.headers.raw()
+    };
   }
 
   private constructTargetUrl(baseUrl: string, path: string): string {
