@@ -7,6 +7,7 @@ import { authRouter } from './routes/auth';
 import { appRouter } from './routes/apps';
 import { prisma } from './lib/prisma';
 import { verifyToken } from './middleware/auth';
+import { QueueService } from './services/QueueService';
 
 dotenv.config();
 
@@ -28,7 +29,7 @@ app.use('/apis/:appId/*', verifyToken, async (req, res) => {
 
     const { appId } = req.params;
     const path = req.originalUrl.replace(`/apis/${appId}`, '');
-    
+
     const proxyService = ProxyService.getInstance();
     const result = await proxyService.forwardRequest(
       appId,
@@ -49,6 +50,12 @@ app.use('/apis/:appId/*', verifyToken, async (req, res) => {
     console.error('Proxy error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
+});
+
+// Initialize queue processor
+const queueService = QueueService.getInstance();
+queueService.processQueue().catch(error => {
+  console.error('Failed to initialize queue processor:', error);
 });
 
 // Start server

@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma';
 import { RateLimitStrategy } from '@prisma/client';
 import { authenticateApiKey, verifyToken } from '../middleware/auth';
 import { ProxyService } from '../services/ProxyService';
+import { QueueService } from '../services/QueueService';
 
 const router = express.Router();
 
@@ -147,6 +148,15 @@ router.all('/:appId/*', authenticateApiKey, verifyToken,  async (req, res) => {
       req.headers,
       req.body
     );
+
+    // Store rate limit api request in Redis if status is 429
+    if (result.status === 429) {
+      const redis = QueueService.getInstance();
+      await redis.addToQueue(req);
+      
+      res.status(202).json({ message: 'Request accepted, will retry after ' + result.headers?.['retry-after'] || 60 + ' seconds' });
+      return;
+    }
 
     res.status(result.status).json(result.data);
   } catch (error) {

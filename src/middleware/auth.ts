@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma';
 import jwt from 'jsonwebtoken';
+import { RateLimitService } from '../services/RateLimitService';
+import { QueueService } from '../services/QueueService';
 
 declare global {
   namespace Express {
@@ -81,3 +83,53 @@ export const verifyToken = async (
     return res.status(401).json({ error: 'Invalid token' });
   }
 };
+
+
+export class RateLimitMiddleware {
+  private static instance: RateLimitMiddleware;
+  private rateLimitService: RateLimitService;
+  private queueService: QueueService;
+
+  private constructor() {
+    this.rateLimitService = RateLimitService.getInstance();
+    this.queueService = QueueService.getInstance();
+  }
+
+  public static getInstance(): RateLimitMiddleware {
+    if (!RateLimitMiddleware.instance) {
+      RateLimitMiddleware.instance = new RateLimitMiddleware();
+    }
+    return RateLimitMiddleware.instance;
+  }
+
+  async handle(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const appId = req.headers['x-app-id'] as string;
+      if (!appId) {
+        res.status(400).json({ message: 'App ID is required' });
+        return;
+      }
+
+      const isRateLimited = await this.rateLimitService.checkRateLimit(appId);
+      
+      if (!isRateLimited) {
+        // Add request to queue instead of rejecting
+        await this.queueService.addToQueue(req);
+        
+        res.status(202).json({
+          message: 'Request queued successfully',
+          status: 'queued'
+        });
+        return;
+      }
+
+      next();
+    } catch (error) {
+      console.error('Rate limit middleware error:', error);
+      res.status(500).json({
+        message: 'Internal server error',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
+}
