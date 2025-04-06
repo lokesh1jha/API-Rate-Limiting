@@ -22,8 +22,8 @@ A proxy service that handles rate limiting for third-party APIs. This service ac
 
 1. Clone the repository:
 ```bash
-git clone <repository-url>
-cd api-rate-limiting
+git clone https://github.com/lokesh1jha/API-Rate-Limiting.git
+cd API-Rate-Limiting
 ```
 
 2. Install dependencies:
@@ -65,6 +65,34 @@ Production mode:
 npm run build
 npm start
 ```
+
+## Folder structure
+
+```
+api-rate-limiter/
+├── node_modules/
+├── prisma/
+├── src/
+│   ├── lib/
+│   │   └── prisma/        # Prisma client
+│   ├── middleware/       # Custom middleware
+│   │   └── auth/        # Authentication middleware
+│   ├── routes/          # API routes
+│   │   ├── apps/       # API services
+│   │   └── auth/       # Authentication services
+│   ├── services/        # Business logic
+│   │   ├── proxyservice/      # Proxy services
+│   │   └── ratelimitservice/  # Rate limiting services
+│   ├── utils/          # Utility functions
+│   │   ├── apikey/      # API key services
+│   └── index.ts          # Main application file
+├── .env               # Environment variables
+├── .gitignore        # Git ignore file
+├── package.json      # Project dependencies
+├── tsconfig.json     # TypeScript configuration
+└── README.md         # Project documentation
+```
+
 
 ## API Endpoints
 
