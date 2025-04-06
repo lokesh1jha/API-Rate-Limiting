@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma';
+import jwt from 'jsonwebtoken';
 
 declare global {
   namespace Express {
@@ -45,3 +46,38 @@ export const authenticateApiKey = async (
     res.status(500).json({ error: 'Internal server error' });
   }
 }; 
+
+export const verifyToken = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    
+    if (!token) {
+      return res.status(401).json({ error: 'No token provided' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key') as any;
+    
+    // Find user to ensure they still exist
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId }
+    });
+
+    if (!user) {
+      return res.status(401).json({ error: 'User not found' });
+    }
+
+    if(req.user && req.user !== user) {
+      return res.status(401).json({ error: 'User not found' });
+    }
+    else {
+      req.user = user;
+    }
+    next();
+  } catch (error) {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
+};

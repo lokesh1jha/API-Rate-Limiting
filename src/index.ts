@@ -6,6 +6,7 @@ import { ProxyService } from './services/ProxyService';
 import { authRouter } from './routes/auth';
 import { appRouter } from './routes/apps';
 import { prisma } from './lib/prisma';
+import { verifyToken } from './middleware/auth';
 
 dotenv.config();
 
@@ -22,13 +23,14 @@ app.use('/auth', authRouter);
 app.use('/apps', appRouter);
 
 // Proxy route
-app.use('/apis/:appId/*', async (req, res) => {
+app.use('/apis/:appId/*', verifyToken, async (req, res) => {
   try {
+
     const { appId } = req.params;
-    const path = req.path.replace(`/apis/${appId}`, '');
+    const path = req.originalUrl.replace(`/apis/${appId}`, '');
     
     const proxyService = ProxyService.getInstance();
-    const response = await proxyService.forwardRequest(
+    const result = await proxyService.forwardRequest(
       appId,
       path,
       req.method,
@@ -37,13 +39,12 @@ app.use('/apis/:appId/*', async (req, res) => {
     );
 
     // Forward response headers
-    Object.entries(response.headers).forEach(([key, value]) => {
-      res.setHeader(key, value);
+    Object.entries(result.headers).forEach(([key, value]) => {
+      res.setHeader(key, value as string);
     });
 
     // Send response
-    const data = await response.text();
-    res.status(response.status).send(data);
+    res.status(result.status).json(result.data);
   } catch (error) {
     console.error('Proxy error:', error);
     res.status(500).json({ error: 'Internal server error' });

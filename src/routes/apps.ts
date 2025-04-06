@@ -1,13 +1,13 @@
 import express from 'express';
 import { prisma } from '../lib/prisma';
 import { RateLimitStrategy } from '@prisma/client';
-import { authenticateApiKey } from '../middleware/auth';
+import { authenticateApiKey, verifyToken } from '../middleware/auth';
 import { ProxyService } from '../services/ProxyService';
 
 const router = express.Router();
 
 // Register new API
-router.post('/', authenticateApiKey, async (req, res) => {
+router.post('/', authenticateApiKey, verifyToken, async (req, res) => {
   try {
     const { name, baseUrl, rateLimitStrategy, requestCount, timeWindow, additionalConfig } = req.body;
     const userId = (req.user as { id: string }).id;
@@ -41,7 +41,7 @@ router.post('/', authenticateApiKey, async (req, res) => {
 });
 
 // Get all registered APIs for user
-router.get('/', authenticateApiKey, async (req, res) => {
+router.get('/', authenticateApiKey, verifyToken, async (req, res) => {
   try {
     const userId = (req.user as { id: string }).id;
     const apps = await prisma.app.findMany({
@@ -55,7 +55,7 @@ router.get('/', authenticateApiKey, async (req, res) => {
 });
 
 // Get specific API details
-router.get('/:id', authenticateApiKey, async (req, res) => {
+router.get('/:id', authenticateApiKey, verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     const userId = (req.user as { id: string }).id;
@@ -76,7 +76,7 @@ router.get('/:id', authenticateApiKey, async (req, res) => {
 });
 
 // Update API configuration
-router.put('/:id', authenticateApiKey, async (req, res) => {
+router.put('/:id', authenticateApiKey, verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     const userId = (req.user as { id: string }).id;
@@ -107,7 +107,7 @@ router.put('/:id', authenticateApiKey, async (req, res) => {
 });
 
 // Delete API
-router.delete('/:id', authenticateApiKey, async (req, res) => {
+router.delete('/:id', authenticateApiKey, verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     const userId = (req.user as { id: string }).id;
@@ -134,7 +134,7 @@ router.delete('/:id', authenticateApiKey, async (req, res) => {
 });
 
 // Proxy route
-router.all('/:appId/*', authenticateApiKey, async (req, res) => {
+router.all('/:appId/*', authenticateApiKey, verifyToken,  async (req, res) => {
   try {
     const { appId } = req.params;
     const path = req.params[0];
