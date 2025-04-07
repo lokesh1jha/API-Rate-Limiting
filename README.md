@@ -69,6 +69,25 @@ npm run build
 npm start
 ```
 
+## Prometheus
+
+Prometheus is configured to scrape metrics from the application. The configuration is located in the `prometheus.yml` file.
+
+To start Prometheus, run the following command:
+```bash
+prometheus --config.file=prometheus.yml
+```
+
+# Grafana
+
+Visit `https://grafana.com/grafana/download?platform=linux` to download Grafana. and follow the instructions to install  and run the Grafana.
+
+Login using `admin` and `admin`.
+
+Add Prometheus as a data source.
+
+
+
 ## Folder structure
 
 ```
@@ -275,4 +294,76 @@ curl -X PUT http://localhost:3000/apis/APP_ID/users/123 \
 ```bash
 curl -X DELETE http://localhost:3000/apis/APP_ID/users/123 \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
-``` 
+```
+
+### Analytics and Metrics
+
+1. Get Analytics Count:
+```bash
+curl --location 'http://localhost:3000/analytics/analytics?timeframe=2h' \
+--header 'Authorization: Bearer YOUR_JWT_TOKEN'
+```
+
+Response:
+```{
+    "totalRequests": 11,
+    "errorCount": 4,
+    "averageProcessingTime": 16428.272727272728,
+    "priorityDistribution": {
+        "0": 11
+    }
+}
+```
+
+
+2. Get rate limit violations:
+```bash
+curl --location 'http://localhost:3000/analytics/user?timeframe=2h' \
+--header 'Authorization: Bearer YOUR_JWT_TOKEN'
+```
+
+Reposne
+```
+[
+    {
+        "id": 4,
+        "timestamp": "2025-04-07T13:41:11.245Z",
+        "endpoint": "/test",
+        "status": 429,
+        "processingTime": 3044,
+        "priority": "normal",
+        "userId": "2c146bb5-805f-4d74-8589-21a6d0c80d4e",
+        "createdAt": "2025-04-07T13:41:13.340Z"
+    },
+    {
+        "id": 3,
+        "timestamp": "2025-04-07T13:40:35.674Z",
+        "endpoint": "/test",
+        "status": 429,
+        "processingTime": 3737,
+        "priority": "normal",
+        "userId": "2c146bb5-805f-4d74-8589-21a6d0c80d4e",
+        "createdAt": "2025-04-07T13:40:35.676Z"
+    },
+    {
+        "id": 2,
+        "timestamp": "2025-04-07T13:38:41.896Z",
+        "endpoint": "/test",
+        "status": 200,
+        "processingTime": 8483,
+        "priority": "normal",
+        "userId": "2c146bb5-805f-4d74-8589-21a6d0c80d4e",
+        "createdAt": "2025-04-07T13:38:41.898Z"
+    },
+    {
+        "id": 1,
+        "timestamp": "2025-04-07T13:38:09.765Z",
+        "endpoint": "/test",
+        "status": 200,
+        "processingTime": 4323,
+        "priority": "normal",
+        "userId": "2c146bb5-805f-4d74-8589-21a6d0c80d4e",
+        "createdAt": "2025-04-07T13:38:09.767Z"
+    }
+]
+```

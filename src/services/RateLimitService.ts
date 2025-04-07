@@ -1,5 +1,6 @@
 import { RateLimitStrategy } from '@prisma/client';
 import Redis from 'ioredis';
+import { Registry, Counter, Gauge } from 'prom-client';
 
 interface RateLimitInfo {
   count: number;
@@ -11,6 +12,13 @@ export class RateLimitService {
   private static instance: RateLimitService;
   private rateLimitMap: Map<string, RateLimitInfo>;
   private redis: Redis;
+  private metrics: Registry;
+  
+  // Prometheus metrics
+  private requestCounter: Counter;
+  private rateLimitGauge: Gauge;
+  private blockedRequestsCounter: Counter;
+  private strategyCounter: Counter;
 
   private limits = {
     0: { requests: 100, window: 60000 }, // Normal: 100 requests per minute
@@ -23,6 +31,38 @@ export class RateLimitService {
   private constructor() {
     this.rateLimitMap = new Map();
     this.redis = new Redis(process.env.REDIS_URL!);
+    this.metrics = new Registry();
+    
+    // Initialize metrics
+    this.requestCounter = new Counter({
+      name: 'rate_limit_requests_total',
+      help: 'Total number of rate limit checks',
+      labelNames: ['identifier', 'priority']
+    });
+
+    this.rateLimitGauge = new Gauge({
+      name: 'rate_limit_current_requests',
+      help: 'Current number of requests in window',
+      labelNames: ['identifier', 'priority']
+    });
+
+    this.blockedRequestsCounter = new Counter({
+      name: 'rate_limit_blocked_requests_total',
+      help: 'Total number of blocked requests',
+      labelNames: ['identifier', 'priority']
+    });
+
+    this.strategyCounter = new Counter({
+      name: 'rate_limit_strategy_usage_total',
+      help: 'Usage of different rate limiting strategies',
+      labelNames: ['strategy']
+    });
+
+    // Register metrics
+    this.metrics.registerMetric(this.requestCounter);
+    this.metrics.registerMetric(this.rateLimitGauge);
+    this.metrics.registerMetric(this.blockedRequestsCounter);
+    this.metrics.registerMetric(this.strategyCounter);
   }
 
   public static getInstance(): RateLimitService {
@@ -47,6 +87,12 @@ export class RateLimitService {
     }
 
     const now = new Date();
+
+    // Increment request counter
+    this.requestCounter.inc({ identifier, priority: priority.toString() });
+    
+    // Track strategy usage
+    this.strategyCounter.inc({ strategy: RateLimitStrategy[strategy] });
 
     switch (strategy) {
       case RateLimitStrategy.FIXED_WINDOW:
@@ -146,5 +192,10 @@ export class RateLimitService {
     this.requestCounts.set(clientId, requests);
     
     return false;
+  }
+
+  // Method to get metrics
+  public async getMetrics(): Promise<string> {
+    return await this.metrics.metrics();
   }
 } 
