@@ -37,3 +37,17 @@ enum RateLimitStrategy {
   SLIDING_WINDOW
   TOKEN_BUCKET
 } 
+
+model RequestAnalytics {
+  id            Int      @id @default(autoincrement())
+  timestamp     DateTime @default(now())
+  endpoint      String
+  status        Int
+  processingTime Int
+  priority      String
+  userId        String
+  createdAt     DateTime @default(now())
+
+  @@index([timestamp])
+  @@index([userId])
+}

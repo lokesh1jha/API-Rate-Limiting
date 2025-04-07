@@ -1,13 +1,21 @@
 import { prisma } from '../lib/prisma';
-import fetch, { Response } from 'node-fetch';
+import fetch from 'node-fetch';
 import { RateLimitService } from './RateLimitService';
+import { AnalyticsService } from '../services/AnalyticsService';
+import { v4 as uuidv4 } from 'uuid';
+import { Request, Response, NextFunction } from 'express';
+import { Redis } from 'ioredis';
 
 export class ProxyService {
   private static instance: ProxyService;
   private rateLimitService: RateLimitService;
+  private analytics: AnalyticsService;
+  private redis: Redis;
 
   private constructor() {
     this.rateLimitService = RateLimitService.getInstance();
+    this.analytics = new AnalyticsService(process.env.REDIS_URL!);
+    this.redis = new Redis(process.env.REDIS_URL!);
   }
 
   public static getInstance(): ProxyService {
@@ -73,5 +81,57 @@ export class ProxyService {
     delete filteredHeaders['content-length'];
     
     return filteredHeaders;
+  }
+
+  async handleRequest(req: Request, res: Response, next: NextFunction) {
+    const startTime = Date.now();
+    const requestId = uuidv4();
+    
+    try {
+      // Check rate limit first
+      const userId = (req as any).user?.id || 'anonymous';
+      const isAllowed = await this.rateLimitService.checkRateLimit(userId);
+      
+      if (!isAllowed) {
+        return res.status(429).json({
+          error: 'Too many requests'
+        });
+      }
+
+      // Process request
+      const response = await this.processRequest(req);
+      
+      // Track analytics
+      const duration = Date.now() - startTime;
+      await this.analytics.logRequest({
+        timestamp: new Date(),
+        endpoint: req.path,
+        status: response.status,
+        processingTime: duration,
+        userId: userId,
+        priority: 'normal'
+      });
+
+      res.json(response);
+    } catch (error) {
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  private getRequestPriority(req: Request): number {
+    return ((req as any).user?.isPremium ?? false) ? 0 : 1;
+  }
+
+  private async processRequest(req: Request) {
+    const appId = (req as any).appId;
+    if (!appId) {
+      throw new Error('App ID is required');
+    }
+    const path = req.path;
+    const method = req.method;
+    const headers = req.headers;
+    const body = req.body;
+
+    return await this.forwardRequest(appId, path, method, headers, body);
   }
 } 
