@@ -5,17 +5,20 @@ import { AnalyticsService } from '../services/AnalyticsService';
 import { v4 as uuidv4 } from 'uuid';
 import { Request, Response, NextFunction } from 'express';
 import { Redis } from 'ioredis';
+import { RequestService } from '../services/RequestService';
 
 export class ProxyService {
   private static instance: ProxyService;
   private rateLimitService: RateLimitService;
   private analytics: AnalyticsService;
   private redis: Redis;
+  private requestService: RequestService;
 
   private constructor() {
     this.rateLimitService = RateLimitService.getInstance();
     this.analytics = new AnalyticsService(process.env.REDIS_URL!);
     this.redis = new Redis(process.env.REDIS_URL!);
+    this.requestService = new RequestService();
   }
 
   public static getInstance(): ProxyService {
@@ -38,8 +41,10 @@ export class ProxyService {
       };
     }
 
-    // Check rate limit before forwarding
-    const isAllowed = await this.rateLimitService.checkRateLimit(appId);
+    const priority = this.getRequestPriority({ headers } as Request);
+    
+    // Check rate limit with priority
+    const isAllowed = await this.rateLimitService.checkRateLimit(appId, priority);
     if (!isAllowed) {
       return {
         status: 429,
@@ -48,21 +53,19 @@ export class ProxyService {
       };
     }
 
-    // Construct target URL
-    const targetUrl = this.constructTargetUrl(app.baseUrl, path);
-
-    // Forward the request
-    const response = await fetch(targetUrl, {
+    // Create request object
+    const request = new Request(this.constructTargetUrl(app.baseUrl, path), {
       method,
       headers: this.filterHeaders(headers),
       body: method === 'GET' ? undefined : body ? JSON.stringify(body) : undefined
     });
 
-    const responseData = await response.json();
+    // Process through priority queue
+    const response = await this.requestService.processRequest(request);
     return {
       status: response.status,
-      data: responseData,
-      headers: response.headers.raw()
+      data: await response.json() || null,
+      headers: response.headers
     };
   }
 
@@ -90,6 +93,8 @@ export class ProxyService {
     try {
       // Check rate limit first
       const userId = (req as any).user?.id || 'anonymous';
+
+      const priority = this.getRequestPriority(req);
       const isAllowed = await this.rateLimitService.checkRateLimit(userId);
       
       if (!isAllowed) {
@@ -109,7 +114,7 @@ export class ProxyService {
         status: response.status,
         processingTime: duration,
         userId: userId,
-        priority: 'normal'
+        priority: priority
       });
 
       res.json(response);
@@ -119,8 +124,31 @@ export class ProxyService {
   }
 
   private getRequestPriority(req: Request): number {
-    return ((req as any).user?.isPremium ?? false) ? 0 : 1;
-  }
+    // Standardize priority levels
+    const priorityMap = {
+        'urgent': 2,
+        'high': 1,
+        'normal': 0
+    };
+    
+    // Check x-priority header first
+    const headerPriority = req.headers['x-priority'];
+    if (headerPriority) {
+        if(parseInt(headerPriority as string) > 2 || parseInt(headerPriority as string) < 0) {
+          return 0;
+        }
+        return parseInt(headerPriority as string);
+    }
+    
+    // Check user role
+    const userRole = (req as any).user?.role;
+    if (userRole === 'premium') return 1;
+    
+    // Check endpoint
+    if (req.path.includes('/api/critical')) return 1;
+    
+    return 0;
+}
 
   private async processRequest(req: Request) {
     const appId = (req as any).appId;

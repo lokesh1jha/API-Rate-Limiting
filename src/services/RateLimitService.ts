@@ -1,5 +1,6 @@
 import { RateLimitStrategy } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import Redis from 'ioredis';
 
 interface RateLimitInfo {
   count: number;
@@ -10,9 +11,19 @@ interface RateLimitInfo {
 export class RateLimitService {
   private static instance: RateLimitService;
   private rateLimitMap: Map<string, RateLimitInfo>;
+  private redis: Redis;
+
+  private limits = {
+    0: { requests: 100, window: 60000 }, // Normal: 100 requests per minute
+    1: { requests: 200, window: 60000 }, // High: 200 requests per minute
+    2: { requests: 500, window: 60000 }  // Urgent: 500 requests per minute
+  };
+
+  private requestCounts: Map<string, number[]> = new Map();
 
   private constructor() {
     this.rateLimitMap = new Map();
+    this.redis = new Redis(process.env.REDIS_URL!);
   }
 
   public static getInstance(): RateLimitService {
@@ -22,33 +33,21 @@ export class RateLimitService {
     return RateLimitService.instance;
   }
 
-  public async checkRateLimit(appId: string): Promise<boolean> {
-    const app = await prisma.app.findUnique({
-      where: { id: appId }
-    });
+  public async checkRateLimit(identifier: string, priority: number = 0): Promise<boolean> {
+    const key = `ratelimit:${identifier}`;
+    const window = 60; // 1 minute window
+    const limits = {
+      2: 100, // urgent: 100 requests per minute
+      1: 50,  // high: 50 requests per minute
+      0: 20   // normal: 20 requests per minute
+    };
 
-    if (!app) {
-      throw new Error('App not found');
+    const current = await this.redis.incr(key);
+    if (current === 1) {
+      await this.redis.expire(key, window);
     }
 
-    const key = `app:${appId}`;
-    const now = new Date();
-    let rateLimitInfo = this.rateLimitMap.get(key);
-
-    if (!rateLimitInfo) {
-      rateLimitInfo = this.initializeRateLimitInfo(app);
-    }
-
-    switch (app.rateLimitStrategy) {
-      case RateLimitStrategy.FIXED_WINDOW:
-        return this.checkFixedWindow(rateLimitInfo, app, now);
-      case RateLimitStrategy.SLIDING_WINDOW:
-        return this.checkSlidingWindow(rateLimitInfo, app, now);
-      case RateLimitStrategy.TOKEN_BUCKET:
-        return this.checkTokenBucket(rateLimitInfo, app, now);
-      default:
-        throw new Error('Unsupported rate limit strategy');
-    }
+    return current <= limits[priority as keyof typeof limits];
   }
 
   private initializeRateLimitInfo(app: any): RateLimitInfo {
@@ -115,5 +114,27 @@ export class RateLimitService {
 
     info.tokens = (info.tokens as number) - 1;
     return true;
+  }
+
+  isRateLimited(clientId: string, priority: number): boolean {
+    const now = Date.now();
+    const limit = this.limits[priority as keyof typeof this.limits];
+    
+    // Get existing requests for this client
+    let requests = this.requestCounts.get(clientId) || [];
+    
+    // Remove old requests outside the window
+    requests = requests.filter(time => now - time < limit.window);
+    
+    // Check if we're over the limit
+    if (requests.length >= limit.requests) {
+      return true;
+    }
+    
+    // Add new request
+    requests.push(now);
+    this.requestCounts.set(clientId, requests);
+    
+    return false;
   }
 } 

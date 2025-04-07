@@ -33,7 +33,8 @@ app.use('/apis/:appId/*', verifyToken, async (req, res) => {
   try {
     const { appId } = req.params;
     const path = req.originalUrl.replace(`/apis/${appId}`, '');
-    
+    const priority = req.headers['x-priority'] as string;
+
     const startTime = Date.now();
     const proxyService = ProxyService.getInstance();
     const result = await proxyService.forwardRequest(
@@ -50,7 +51,7 @@ app.use('/apis/:appId/*', verifyToken, async (req, res) => {
       endpoint: path,
       status: result.status,
       processingTime: Date.now() - startTime,
-      priority: 'normal',
+      priority: priority ? parseInt(priority) : 0,
       userId: req.user?.id || 'unknown'
     });
 

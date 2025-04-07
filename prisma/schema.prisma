@@ -44,7 +44,7 @@ model RequestAnalytics {
   endpoint      String
   status        Int
   processingTime Int
-  priority      String
+  priority      Int     @default(0)  // 0: normal, 1: high, 2: urgent
   userId        String
   createdAt     DateTime @default(now())
 

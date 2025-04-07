@@ -6,7 +6,7 @@ interface RequestAnalytics {
   endpoint: string;
   status: number;
   processingTime: number;
-  priority: string;
+  priority: number;
   userId: string;
 }
 
@@ -56,6 +56,7 @@ export class AnalyticsService {
     totalRequests: number;
     errorCount: number;
     averageProcessingTime: number | null;
+    priorityDistribution: Record<number, number>;
   }> {
     try {
       const hours = this.timeframes[timeframe] || 24;
@@ -73,21 +74,23 @@ export class AnalyticsService {
         }
       });
 
-      const errorCount = await prisma.requestAnalytics.count({
+      const priorityDistribution = await prisma.requestAnalytics.groupBy({
+        by: ['priority'],
         where: {
           timestamp: {
             gte: startTime
-          },
-          status: {
-            gte: 400
           }
-        }
+        },
+        _count: true
       });
 
       return {
         totalRequests: analytics._count,
-        errorCount,
-        averageProcessingTime: analytics._avg.processingTime
+        errorCount: await this.getErrorCount(startTime),
+        averageProcessingTime: analytics._avg.processingTime,
+        priorityDistribution: Object.fromEntries(
+          priorityDistribution.map(p => [p.priority, p._count])
+        )
       };
     } catch (error) {
       console.error('Error fetching analytics:', error);
@@ -128,5 +131,16 @@ export class AnalyticsService {
     } catch (error) {
       console.error('Error during cleanup:', error);
     }
+  }
+
+  private async getErrorCount(startTime: Date): Promise<number> {
+    return await prisma.requestAnalytics.count({
+      where: {
+        createdAt: { gte: startTime },
+        status: {
+          gt: 399
+        }
+      }
+    });
   }
 }
