@@ -1,5 +1,8 @@
 import { prisma } from "../lib/prisma";
+import { generateApiKey } from "../utils/apiKey";
 import { PriorityQueueService } from "./PriorityQueueService";
+import { RequestInfo } from 'node-fetch';
+import { Response, fetch } from 'undici';
 
 export class RequestService {
     private priorityQueue: PriorityQueueService;
@@ -8,20 +11,20 @@ export class RequestService {
         this.priorityQueue = new PriorityQueueService();
     }
 
-    async processRequest(request: Request): Promise<Response> {
+    async processRequest(request: Request, userId: string): Promise<Response> {
         // Determine priority based on request characteristics
         const priority = this.determinePriority(request);
 
         // Add to priority queue
         this.priorityQueue.enqueue({
-            id: crypto.randomUUID(),
+            id: generateApiKey(),
             priority,
             timestamp: new Date(),
             data: request
         });
 
         // Process requests in priority order
-        return this.processNextRequest();
+        return this.processNextRequest(userId);
     }
 
     private determinePriority(request: Request): number {
@@ -39,7 +42,7 @@ export class RequestService {
         return 0; // default priority
     }
 
-    private async processNextRequest(): Promise<Response> {
+    private async processNextRequest(userId: string): Promise<Response> {
         const nextRequest = this.priorityQueue.dequeue();
         if (!nextRequest) {
             throw new Error('No requests in queue');
@@ -56,7 +59,7 @@ export class RequestService {
                     timestamp: new Date(),
                     processingTime: Date.now() - startTime,
                     endpoint: nextRequest.data.url,
-                    userId: nextRequest.data.userId,
+                    userId: userId,
                     status: response.status,
                     priority: nextRequest.priority
                 }
@@ -70,7 +73,7 @@ export class RequestService {
                     timestamp: new Date(),
                     processingTime: Date.now() - startTime,
                     endpoint: nextRequest.data.url,
-                    userId: nextRequest.data.userId,
+                    userId: userId,
                     status: 500,
                     priority: nextRequest.priority,
                 }
@@ -81,6 +84,6 @@ export class RequestService {
 
     private async handleRequest(request: Request): Promise<Response> {
        // use fecth and return response as request is ready to be processed
-       return fetch(request);
+       return fetch(request) as unknown as Promise<Response>;
     }
 }

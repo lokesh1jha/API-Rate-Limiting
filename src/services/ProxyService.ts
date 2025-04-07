@@ -1,9 +1,9 @@
 import { prisma } from '../lib/prisma';
-import fetch from 'node-fetch';
 import { RateLimitService } from './RateLimitService';
 import { AnalyticsService } from '../services/AnalyticsService';
 import { v4 as uuidv4 } from 'uuid';
 import { Request, Response, NextFunction } from 'express';
+import { Request as RawRequest } from 'undici';
 import { Redis } from 'ioredis';
 import { RequestService } from '../services/RequestService';
 
@@ -28,7 +28,7 @@ export class ProxyService {
     return ProxyService.instance;
   }
 
-  public async forwardRequest(appId: string, path: string, method: string, headers: any, body?: any): Promise<{ status: number; data: any; headers: any }> {
+  public async forwardRequest(appId: string, path: string, method: string, headers: any, body?: any, userId: string = 'unknown'): Promise<{ status: number; data: any; headers: any }> {
     const app = await prisma.app.findUnique({
       where: { id: appId }
     });
@@ -54,14 +54,15 @@ export class ProxyService {
     }
 
     // Create request object
-    const request = new Request(this.constructTargetUrl(app.baseUrl, path), {
+    const request = new RawRequest(this.constructTargetUrl(app.baseUrl, path), {
       method,
       headers: this.filterHeaders(headers),
       body: method === 'GET' ? undefined : body ? JSON.stringify(body) : undefined
     });
 
     // Process through priority queue
-    const response = await this.requestService.processRequest(request);
+    // @ts-ignore
+    const response = await this.requestService.processRequest(request, userId);
     return {
       status: response.status,
       data: await response.json() || null,
@@ -132,7 +133,7 @@ export class ProxyService {
     };
     
     // Check x-priority header first
-    const headerPriority = req.headers['x-priority'];
+    const headerPriority = req.headers['x-priority'] ?? 0;
     if (headerPriority) {
         if(parseInt(headerPriority as string) > 2 || parseInt(headerPriority as string) < 0) {
           return 0;
@@ -141,11 +142,11 @@ export class ProxyService {
     }
     
     // Check user role
-    const userRole = (req as any).user?.role;
-    if (userRole === 'premium') return 1;
+    // const userRole = (req as any).user?.role;
+    // if (userRole === 'premium') return 1;
     
     // Check endpoint
-    if (req.path.includes('/api/critical')) return 1;
+    // if (req.path.includes('/api/critical')) return 1;
     
     return 0;
 }

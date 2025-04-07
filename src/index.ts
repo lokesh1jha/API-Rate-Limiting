@@ -34,6 +34,7 @@ app.use('/apis/:appId/*', verifyToken, async (req, res) => {
     const { appId } = req.params;
     const path = req.originalUrl.replace(`/apis/${appId}`, '');
     const priority = req.headers['x-priority'] as string ?? 0;
+    const userId = req.user?.id || 'unknown';
 
     const startTime = Date.now();
     const proxyService = ProxyService.getInstance();
@@ -42,7 +43,8 @@ app.use('/apis/:appId/*', verifyToken, async (req, res) => {
       path,
       req.method,
       req.headers,
-      req.body
+      req.body,
+      userId
     );
 
     // Log the request after we have the response

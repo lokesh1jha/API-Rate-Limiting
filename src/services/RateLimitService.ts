@@ -1,5 +1,4 @@
 import { RateLimitStrategy } from '@prisma/client';
-import { prisma } from '../lib/prisma';
 import Redis from 'ioredis';
 
 interface RateLimitInfo {
