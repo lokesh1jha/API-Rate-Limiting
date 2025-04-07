@@ -32,21 +32,32 @@ export class RateLimitService {
     return RateLimitService.instance;
   }
 
-  public async checkRateLimit(identifier: string, priority: number = 0): Promise<boolean> {
+  public async checkRateLimit(identifier: string, priority: number = 0, strategy: RateLimitStrategy = RateLimitStrategy.FIXED_WINDOW): Promise<boolean> {
     const key = `ratelimit:${identifier}`;
-    const window = 60; // 1 minute window
-    const limits = {
-      2: 100, // urgent: 100 requests per minute
-      1: 50,  // high: 50 requests per minute
-      0: 20   // normal: 20 requests per minute
+    const app = {
+      id: identifier,
+      rateLimitStrategy: strategy,
+      requestCount: this.limits[priority as keyof typeof this.limits].requests,
+      timeWindow: this.limits[priority as keyof typeof this.limits].window / 1000
     };
 
-    const current = await this.redis.incr(key);
-    if (current === 1) {
-      await this.redis.expire(key, window);
+    let info = this.rateLimitMap.get(key);
+    if (!info) {
+      info = this.initializeRateLimitInfo(app);
     }
 
-    return current <= limits[priority as keyof typeof limits];
+    const now = new Date();
+
+    switch (strategy) {
+      case RateLimitStrategy.FIXED_WINDOW:
+        return this.checkFixedWindow(info, app, now);
+      case RateLimitStrategy.SLIDING_WINDOW:
+        return this.checkSlidingWindow(info, app, now);
+      case RateLimitStrategy.TOKEN_BUCKET:
+        return this.checkTokenBucket(info, app, now);
+      default:
+        return this.checkFixedWindow(info, app, now);
+    }
   }
 
   private initializeRateLimitInfo(app: any): RateLimitInfo {

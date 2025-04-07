@@ -6,6 +6,7 @@ import { Request, Response, NextFunction } from 'express';
 import { Request as RawRequest } from 'undici';
 import { Redis } from 'ioredis';
 import { RequestService } from '../services/RequestService';
+import { RateLimitStrategy } from '@prisma/client';
 
 export class ProxyService {
   private static instance: ProxyService;
@@ -44,7 +45,7 @@ export class ProxyService {
     const priority = this.getRequestPriority({ headers } as Request);
     
     // Check rate limit with priority
-    const isAllowed = await this.rateLimitService.checkRateLimit(appId, priority);
+    const isAllowed = await this.rateLimitService.checkRateLimit(appId, priority, app.rateLimitStrategy as RateLimitStrategy);
     if (!isAllowed) {
       return {
         status: 429,
