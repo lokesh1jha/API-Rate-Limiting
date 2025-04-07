@@ -9,6 +9,7 @@ import { prisma } from './lib/prisma';
 import { verifyToken } from './middleware/auth';
 import { analyticsRouter } from './routes/analytics';
 import { AnalyticsService } from './services/AnalyticsService';
+import metricsRouter from './routes/metricsRouter';
 
 dotenv.config();
 
@@ -24,6 +25,7 @@ app.use(express.json());
 app.use('/auth', authRouter);
 app.use('/apps', appRouter);
 app.use('/analytics', analyticsRouter);
+app.use('/metrics', metricsRouter);
 
 // Add this near the top with other service initializations
 const analyticsService = new AnalyticsService(process.env.REDIS_URL || 'redis://localhost:6379');

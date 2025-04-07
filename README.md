@@ -69,6 +69,25 @@ npm run build
 npm start
 ```
 
+## Prometheus
+
+Prometheus is configured to scrape metrics from the application. The configuration is located in the `prometheus.yml` file.
+
+To start Prometheus, run the following command:
+```bash
+prometheus --config.file=prometheus.yml
+```
+
+# Grafana
+
+Visit `https://grafana.com/grafana/download?platform=linux` to download Grafana. and follow the instructions to install  and run the Grafana.
+
+Login using `admin` and `admin`.
+
+Add Prometheus as a data source.
+
+
+
 ## Folder structure
 
 ```
