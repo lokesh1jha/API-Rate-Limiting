@@ -70,7 +70,7 @@ export const verifyToken = async (
       return res.status(401).json({ error: 'User not found' });
     }
 
-    if(req.user && req.user !== user) {
+    if(req.user && req.user.email !== user.email) {
       return res.status(401).json({ error: 'User not found' });
     }
     else {

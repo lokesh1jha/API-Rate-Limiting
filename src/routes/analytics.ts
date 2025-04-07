@@ -15,7 +15,7 @@ router.get('/analytics', verifyToken, async (req, res) => {
   }
 });
 
-router.get('/analytics/user', verifyToken, async (req, res) => {
+router.get('/user', verifyToken, async (req, res) => {
   try {
     const timeframe = req.query.timeframe as string || '24h';
     if (!req.user) {
@@ -29,4 +29,4 @@ router.get('/analytics/user', verifyToken, async (req, res) => {
   }
 });
 
-export default router;
+export const analyticsRouter = router;

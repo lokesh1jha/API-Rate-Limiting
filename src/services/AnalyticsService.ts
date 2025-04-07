@@ -1,6 +1,5 @@
 import { Redis } from 'ioredis';
-import { prisma } from '../lib/prisma';
-import { PrismaClient } from '@prisma/client';
+import {prisma} from '../lib/prisma';
 
 interface RequestAnalytics {
   timestamp: Date;
@@ -17,7 +16,6 @@ interface TimeframeOptions {
 
 export class AnalyticsService {
   private redis: Redis;
-  private prisma: PrismaClient;
   private readonly timeframes: TimeframeOptions = {
     '24h': 24,
     '7d': 7 * 24,
@@ -26,13 +24,12 @@ export class AnalyticsService {
 
   constructor(redisUrl: string) {
     this.redis = new Redis(redisUrl);
-    this.prisma = prisma;
   }
 
   async logRequest(analytics: RequestAnalytics): Promise<void> {
     try {
       // Store in PostgreSQL using Prisma
-      await this.prisma.requestAnalytics.create({
+      await prisma.requestAnalytics.create({
         data: {
           timestamp: analytics.timestamp,
           endpoint: analytics.endpoint,
@@ -64,27 +61,33 @@ export class AnalyticsService {
       const hours = this.timeframes[timeframe] || 24;
       const startTime = new Date(Date.now() - hours * 60 * 60 * 1000);
       
-      const analytics = await this.prisma.requestAnalytics.aggregate({
+      const analytics = await prisma.requestAnalytics.aggregate({
         where: {
           timestamp: {
             gte: startTime
           }
         },
-        _count: {
-          _all: true,
-          status: {
-            _gt: 399
-          } as any
-        },
+        _count: true,
         _avg: {
           processingTime: true
         }
       });
 
+      const errorCount = await prisma.requestAnalytics.count({
+        where: {
+          timestamp: {
+            gte: startTime
+          },
+          status: {
+            gte: 400
+          }
+        }
+      });
+
       return {
-        totalRequests: (analytics as any)._count?._all ?? 0,
-        errorCount: (analytics as any)._count?.status ?? 0,
-        averageProcessingTime: (analytics as any)._avg?.processingTime ?? 0
+        totalRequests: analytics._count,
+        errorCount,
+        averageProcessingTime: analytics._avg.processingTime
       };
     } catch (error) {
       console.error('Error fetching analytics:', error);
@@ -97,7 +100,7 @@ export class AnalyticsService {
       const hours = this.timeframes[timeframe] || 24;
       const startTime = new Date(Date.now() - hours * 60 * 60 * 1000);
 
-      return await this.prisma.requestAnalytics.findMany({
+      return await prisma.requestAnalytics.findMany({
         where: {
           userId,
           timestamp: {
@@ -120,7 +123,7 @@ export class AnalyticsService {
     try {
       await Promise.all([
         this.redis.quit(),
-        this.prisma.$disconnect()
+        // prisma.$disconnect()
       ]);
     } catch (error) {
       console.error('Error during cleanup:', error);

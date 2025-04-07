@@ -48,6 +48,9 @@ DEFAULT_RATE_LIMIT_WINDOW=15
 DEFAULT_RATE_LIMIT_MAX_REQUESTS=100
 ```
 
+#Redis
+REDIS_URL=redis://127.0.0.1:6379
+
 4. Set up the database:
 ```bash
 npx prisma migrate dev
