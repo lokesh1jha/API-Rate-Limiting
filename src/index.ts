@@ -33,7 +33,7 @@ app.use('/apis/:appId/*', verifyToken, async (req, res) => {
   try {
     const { appId } = req.params;
     const path = req.originalUrl.replace(`/apis/${appId}`, '');
-    const priority = req.headers['x-priority'] as string;
+    const priority = req.headers['x-priority'] as string ?? 0;
 
     const startTime = Date.now();
     const proxyService = ProxyService.getInstance();
